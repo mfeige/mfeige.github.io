@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Associate</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    font-family: sans-serif;
+    text-align: center;
+  }
+
+  #setup { margin: 10px auto; display: inline-block; max-width: 95vw; }
+  textarea { 
+    width: 95vw;
+    max-width: 240px; 
+    height: 120px;
+    font-size: 16px; 
+    display: block; 
+    margin: 0 auto 10px auto;
+    box-sizing: border-box;
+  }
+  select, button { 
+    margin-top: 10px; 
+    padding: 8px 12px; 
+    font-size: 16px; 
+  }
+
+  .grid { 
+    display: grid; 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 10px; 
+    margin: 20px auto; 
+    width: 95vw;
+    max-width: 240px; 
+  }
+  .card { 
+    border: 1px solid #333; 
+    padding: 20px; 
+    text-align: center; 
+    background: #eee; 
+    border-radius: 8px; 
+    font-size: 18px;
+    user-select: none;
+    box-sizing: border-box;
+  }
+  .card.selected { background: #add8e6; }
+  .found { background: #8f8; visibility: hidden; }
+
+  #controls { margin-top: 15px; }
+  #controls button { margin: 5px; }
+
+  h2 { margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <p>Enter word pairs, one per row:</p>
+  <textarea id="wordInput" placeholder=""></textarea><br>
+  <label for="delimiter">Delimiter:</label>
+  <select id="delimiter">
+    <option value=",">Comma (,)</option>
+    <option value=";">Semicolon (;)</option>
+    <option value="tab">Tab</option>
+  </select><br>
+  <button id="startBtn">Start</button>
+</div>
+
+<div id="game" style="display:none;">
+  <div id="controls"></div>
+  <div class="grid" id="grid"></div>
+  <h2>Found pairs</h2>
+  <ol id="found"></ol>
+</div>
+
+<script>
+let allWords = [];     
+let currentSet = 0;    
+let sets = [];         
+
+function partitionWords(pairs, maxCards = 10) {
+  let flatPairs = [...pairs]; // kopie
+  let totalCards = flatPairs.length * 2;
+  let numSets = Math.ceil(totalCards / maxCards);
+  let perSet = Math.floor(totalCards / numSets);
+
+  let result = [];
+  let index = 0;
+
+  for (let i = 0; i < numSets; i++) {
+    let size = perSet;
+    if (i === numSets - 1) {
+      size = totalCards - perSet * (numSets - 1);
+    }
+    let pairCount = Math.floor(size / 2);
+    result.push(flatPairs.slice(index, index + pairCount));
+    index += pairCount;
+  }
+  return result;
+}
+
+function startGame() {
+  const input = document.getElementById("wordInput").value.trim();
+  const delimiterChoice = document.getElementById("delimiter").value;
+
+  if (!input) {
+    alert("Please insert word pairs!");
+    return;
+  }
+
+  let delimiter = delimiterChoice === "tab" ? /\t/ : delimiterChoice;
+
+  allWords = [];
+  input.split(/\n/).forEach(line => {
+    let parts = line.split(delimiter).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 2) allWords.push(parts);
+  });
+
+  if (allWords.length === 0) {
+    alert("No valid word pairs found!");
+    return;
+  }
+
+  // Partitionen erstellen (max. 10 Karten pro Set)
+  sets = partitionWords(allWords, 10);
+  currentSet = 0;
+
+  document.getElementById("setup").style.display = "none";
+  document.getElementById("game").style.display = "block";
+
+  loadSet(currentSet);
+}
+
+function loadSet(index) {
+  let grid = document.getElementById("grid");
+  let foundList = document.getElementById("found");
+  let controls = document.getElementById("controls");
+
+  grid.innerHTML = "";
+  foundList.innerHTML = "";
+  controls.innerHTML = "";
+
+  if (index >= sets.length) {
+    grid.style.display = "none";
+    let doneMsg = document.createElement("p");
+    doneMsg.innerHTML = "<b>Finished 🎉</b>";
+    controls.appendChild(doneMsg);
+
+    let restartBtn = document.createElement("button");
+    restartBtn.textContent = "Restart";
+    restartBtn.onclick = () => {
+      document.getElementById("setup").style.display = "block";
+      document.getElementById("game").style.display = "none";
+      document.getElementById("wordInput").value = "";
+      grid.style.display = "grid";
+    };
+    controls.appendChild(restartBtn);
+    return;
+  }
+
+  let words = sets[index];
+  let cards = [];
+  words.forEach(p => cards.push(...p));
+  cards = cards.sort(() => Math.random() - 0.5);
+
+  let selected = [];
+
+  cards.forEach(word => {
+    let div = document.createElement("div");
+    div.className = "card";
+    div.textContent = word;
+    div.dataset.word = word;
+    grid.appendChild(div);
+
+    div.addEventListener("click", () => {
+      if (div.classList.contains("found") || div.classList.contains("selected")) return;
+
+      div.classList.add("selected");
+      selected.push(div);
+
+      if (selected.length === 2) {
+        let [c1, c2] = selected;
+        let match = words.find(p => p.includes(c1.dataset.word) && p.includes(c2.dataset.word));
+
+        if (match) {
+          setTimeout(() => {
+            c1.classList.add("found");
+            c2.classList.add("found");
+            let li = document.createElement("li");
+            li.textContent = match[0] + " ↔ " + match[1];
+            foundList.appendChild(li);
+
+            // Set fertig?
+            if ([...grid.querySelectorAll(".card:not(.found)")].length === 0) {
+              grid.style.display = "none";
+              let nextBtn = document.createElement("button");
+              nextBtn.textContent = (index + 1 < sets.length) ? "Weiter" : "Fertig";
+              nextBtn.onclick = () => {
+                grid.style.display = "grid";
+                loadSet(index + 1);
+              };
+              controls.appendChild(nextBtn);
+            }
+          }, 300);
+        } else {
+          setTimeout(() => {
+            c1.classList.remove("selected");
+            c2.classList.remove("selected");
+          }, 600);
+        }
+        selected = [];
+      }
+    });
+  });
+}
+
+document.getElementById("startBtn").addEventListener("click", startGame);
+</script>
+</body>
+</html>
