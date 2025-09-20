@@ -20,6 +20,12 @@
 				display: inline-block;
 				max-width: 95vw;
 			}
+			#finished {
+				margin: 10px auto;
+				display: inline-block;
+				max-width: 95vw;
+				display: none;
+			}
 			textarea {
 				width: 95vw;
 				max-width: 240px;
@@ -97,16 +103,22 @@
 	<body>
 		<div id="setup">
 			<p>Enter word pairs, one per row:</p>
-			<textarea id="wordInput" placeholder=""></textarea><br />
+			<textarea autofocus id="wordInput" placeholder=""></textarea><br />
 			<label for="delimiter">Delimiter:</label>
 			<select id="delimiter">
 				<option value=",">Comma (,)</option>
 				<option value=";">Semicolon (;)</option>
 				<option value="tab">Tab</option></select
 			><br />
+			<button id="startBtn" onclick="processInput(); start();">
+				Start
+			</button>
 		</div>
-		<div id="navigation">
-			<button id="startBtn">Start</button>
+		<br />
+		<div id="finished">
+			<p><b>Finished 🎉</b></p>
+			<button id="restartBtn" onclick="start();">Restart</button>
+			<button id="newInputBtn" onclick="newInput();">New Input</button>
 		</div>
 
 		<div id="game" style="display: none">
@@ -168,11 +180,11 @@
 						.forEach((pair) => allPairs.push(pair));
 				}
 				if (allPairs.length > 0) {
-					startAssoc();
+					start();
 				}
 			});
 
-			function startAssocOnInput() {
+			function processInput() {
 				const input = document.getElementById("wordInput").value.trim();
 				const delimiterChoice =
 					document.getElementById("delimiter").value;
@@ -189,10 +201,9 @@
 					let parts = getParts(line);
 					if (parts.length === 2) allPairs.push(line);
 				});
-				startAssoc();
 			}
 
-			function startAssoc() {
+			function start() {
 				if (allPairs.length === 0) {
 					alert("No valid word pairs found!");
 					return;
@@ -204,9 +215,16 @@
 				currentSet = 0;
 
 				document.getElementById("setup").style.display = "none";
-				document.getElementById("navigation").style.display = "none";
 				document.getElementById("game").style.display = "block";
+				document.getElementById("finished").style.display = "none";
 				loadSet(currentSet);
+			}
+
+			function newInput() {
+				document.getElementById("setup").style.display = "block";
+				document.getElementById("finished").style.display = "none";
+				document.getElementById("game").style.display = "none";
+				document.getElementById("wordInput").value = "";
 			}
 
 			function loadSet(index) {
@@ -219,23 +237,8 @@
 				controls.innerHTML = "";
 
 				if (index >= sets.length) {
-					table.style.display = "none";
-					let doneMsg = document.createElement("p");
-					doneMsg.innerHTML = "<b>Finished 🎉</b>";
-					controls.appendChild(doneMsg);
-
-					let newInputBtn = document.createElement("button");
-					newInputBtn.textContent = "New Input";
-					newInputBtn.onclick = () => {
-						document.getElementById("setup").style.display =
-							"block";
-						document.getElementById("navigation").style.display =
-							"block";
-						document.getElementById("game").style.display = "none";
-						document.getElementById("wordInput").value = "";
-						table.style.display = "table";
-					};
-					controls.appendChild(newInputBtn);
+					document.getElementById("game").style.display = "none";
+					document.getElementById("finished").style.display = "block";
 					return;
 				}
 
@@ -309,10 +312,7 @@
 													document.createElement(
 														"button",
 													);
-												nextBtn.textContent =
-													index + 1 < sets.length
-														? "Next"
-														: "Finished";
+												nextBtn.textContent = "Next";
 												nextBtn.onclick = () => {
 													table.style.display =
 														"table";
@@ -338,10 +338,6 @@
 					table.appendChild(tr);
 				}
 			}
-
-			document
-				.getElementById("startBtn")
-				.addEventListener("click", startAssocOnInput);
 		</script>
 	</body>
 </html>
