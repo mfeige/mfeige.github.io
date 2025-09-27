@@ -16,15 +16,25 @@
 			}
 
 			#setup {
-				margin: 10px auto;
 				display: inline-block;
+				margin: 10px auto;
 				max-width: 95vw;
 			}
-			#finished {
-				margin: 10px auto;
-				display: inline-block;
-				max-width: 95vw;
+			#navigation {
 				display: none;
+				margin: 10px auto;
+				max-width: 95vw;
+			}
+			#navigationButtons {
+				display: flex;
+				gap: 10px;
+				max-width: 500px;
+				justify-content: center;
+			}
+			.navigationBtn {
+				font-size: 32px;
+				flex: 1;
+				align-items: stretch;
 			}
 			textarea {
 				width: 95vw;
@@ -49,21 +59,20 @@
 			}
 
 			td {
-				width: 50%; /* two columns, always half the row */
+				width: 50%;
 				padding: 6px;
 				box-sizing: border-box;
 			}
 
 			.card {
 				width: 100%; /* card fills td */
-				aspect-ratio: 3 / 2; /* keeps card shape (e.g. 3:2) */
 				border: 1px solid #333;
 				border-radius: 8px;
 				background: #eee;
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				font-size: clamp(14px, 5vw, 20px); /* scales text */
+				font-size: clamp(14px, 5vw, 20px);
 				user-select: none;
 				box-sizing: border-box;
 				padding: 10px;
@@ -101,37 +110,63 @@
 		</style>
 	</head>
 	<body>
-		<div id="setup">
+		<div id="setup" data-display="block">
 			<p>Enter word pairs, one per row:</p>
 			<textarea autofocus id="wordInput" placeholder=""></textarea><br />
 			<label for="delimiter">Delimiter:</label>
 			<select id="delimiter">
 				<option value=",">Comma (,)</option>
 				<option value=";">Semicolon (;)</option>
-				<option value="tab">Tab</option></select
-			><br />
-			<button id="startBtn" onclick="processInput(); start();">
-				Start
-			</button>
+				<option value="tab">Tab</option>
+			</select>
+			<br />
+			<button onclick="importPairs();">Import</button>
 		</div>
 		<br />
-		<div id="finished">
-			<p><b>Finished 🎉</b></p>
-			<button id="restartBtn" onclick="start();">Restart</button>
-			<button id="newInputBtn" onclick="newInput();">New Input</button>
-		</div>
 
-		<div id="game" style="display: none">
-			<div id="controls"></div>
+		<div id="navigation" data-display="flex">
+			<p id="finished"><b>Finished 🎉</b></p>
+			<p id="navigationHeader"></p>
+			<p>Choose the method to practice:</p>
+			<div style="display: inline-block">
+				<div id="navigationButtons">
+					<button class="navigationBtn" onclick="practice(0);">
+						⟺
+					</button>
+					<button class="navigationBtn" onclick="practice(1);">
+						⟹
+					</button>
+					<button class="navigationBtn" onclick="practice(2);">
+						⟸
+					</button>
+					<button
+						id="newInput"
+						class="navigationBtn"
+						onclick="showSetup();"
+						style.display="none"
+					>
+						New
+					</button>
+				</div>
+			</div>
+		</div>
+		<br />
+
+		<div id="practice" style="display: none" data-display="block">
+			<div id="controls">
+				<button id="nextBtn" onClick="nextSet();">Next</button>
+			</div>
 			<table id="grid"></table>
 			<ol id="found"></ol>
 		</div>
 
 		<script>
-			let allPairs = [];
-			let currentSet = 0;
-			let sets = [];
-			let delimiter = "";
+			let g_allPairs = [];
+			let g_setIndex = 0;
+			let g_sets = [];
+			let g_delimiter = "";
+			let g_mode = 0;
+			let g_selected = [];
 
 			function shuffleArray(array) {
 				for (var i = array.length - 1; i > 0; i--) {
@@ -144,17 +179,17 @@
 
 			function partitionPairs(pairs, maxPairs = 5) {
 				let totalPairs = pairs.length;
-				let numSets = Math.ceil(totalPairs / maxPairs);
-				let minPerSet = Math.floor(totalPairs / numSets);
-				let largeSets = totalPairs - numSets * minPerSet;
+				let numg_sets = Math.ceil(totalPairs / maxPairs);
+				let minPerSet = Math.floor(totalPairs / numg_sets);
+				let largeg_sets = totalPairs - numg_sets * minPerSet;
 
 				let result = [];
 				let index = 0;
 				let pairsRemaining = totalPairs;
 
-				for (let i = 0; i < numSets; i++) {
+				for (let i = 0; i < numg_sets; i++) {
 					let pairCount = minPerSet;
-					if (i < largeSets) {
+					if (i < largeg_sets) {
 						pairCount += 1;
 					}
 					result.push(pairs.slice(index, index + pairCount));
@@ -165,26 +200,35 @@
 
 			function getParts(pair) {
 				return pair
-					.split(delimiter)
+					.split(g_delimiter)
 					.map((s) => s.trim())
 					.filter(Boolean);
 			}
 
-			window.addEventListener("DOMContentLoaded", () => {
-				const params = new URLSearchParams(window.location.search);
-				delimiter = params.get("delimiter") || ",";
-				let pairsParam = params.get("pairs") || "";
-				if (pairsParam) {
-					pairsParam
-						.split("|")
-						.forEach((pair) => allPairs.push(pair));
-				}
-				if (allPairs.length > 0) {
-					start();
-				}
-			});
+			function showTopDiv(id) {
+				const divIds = ["setup", "navigation", "practice"];
+				divIds.forEach((divId) => {
+					let div = document.getElementById(divId);
+					div.style.display = divId == id ? "block" : "none";
+				});
+			}
 
-			function processInput() {
+			function showSetup() {
+				showTopDiv("setup");
+				let wordInput = document.getElementById("wordInput");
+				wordInput.value = "";
+				wordInput.focus();
+				document.addEventListener("keydown", handleKeydownSetup);
+			}
+
+			function handleKeydownSetup() {
+				if (event.ctrlKey && event.key == "Enter") {
+					event.preventDefault();
+					importPairs();
+				}
+			}
+
+			function importPairs() {
 				const input = document.getElementById("wordInput").value.trim();
 				const delimiterChoice =
 					document.getElementById("delimiter").value;
@@ -194,64 +238,159 @@
 					return;
 				}
 
-				delimiter = delimiterChoice === "tab" ? /\t/ : delimiterChoice;
+				g_delimiter = delimiterChoice == "tab" ? /\t/ : delimiterChoice;
 
-				allPairs = [];
+				g_allPairs = [];
 				input.split(/\n/).forEach((line) => {
 					let parts = getParts(line);
-					if (parts.length === 2) allPairs.push(line);
+					if (parts.length == 2) g_allPairs.push(line);
 				});
-			}
-
-			function start() {
-				if (allPairs.length === 0) {
+				if (g_allPairs.length == 0) {
 					alert("No valid word pairs found!");
 					return;
 				}
-
-				shuffleArray(allPairs);
-
-				sets = partitionPairs(allPairs);
-				currentSet = 0;
-
-				document.getElementById("setup").style.display = "none";
-				document.getElementById("game").style.display = "block";
-				document.getElementById("finished").style.display = "none";
-				loadSet(currentSet);
+				document.removeEventListener("keydown", handleKeydownSetup);
+				showNavigation();
 			}
 
-			function newInput() {
-				document.getElementById("setup").style.display = "block";
-				document.getElementById("finished").style.display = "none";
-				document.getElementById("game").style.display = "none";
-				document.getElementById("wordInput").value = "";
+			function showNavigation(showFinished = false) {
+				showTopDiv("navigation");
+				document.getElementById("finished").style.display = showFinished
+					? "block"
+					: "none";
+				let pairText =
+					g_allPairs.length == 1
+						? "1 pair"
+						: g_allPairs.length + " pairs";
+				document.getElementById("navigationHeader").innerHTML =
+					pairText + " loaded";
 			}
 
-			function loadSet(index) {
+			function practice(mode) {
+				g_mode = mode;
+
+				shuffleArray(g_allPairs);
+
+				g_sets = partitionPairs(g_allPairs);
+				g_setIndex = 0;
+				showTopDiv("practice");
+				loadSet();
+			}
+
+			function onClickMatch(div) {
+				if (
+					div.classList.contains("found") ||
+					div.classList.contains("selected")
+				)
+					return;
+
+				div.classList.add("selected");
 				let table = document.getElementById("grid");
-				let foundList = document.getElementById("found");
-				let controls = document.getElementById("controls");
+				let selected = [...table.querySelectorAll(".card.selected")];
 
-				table.innerHTML = "";
-				foundList.innerHTML = "";
-				controls.innerHTML = "";
-
-				if (index >= sets.length) {
-					document.getElementById("game").style.display = "none";
-					document.getElementById("finished").style.display = "block";
+				if (selected.length != 2) {
 					return;
 				}
 
-				let pairs = sets[index];
+				let pairs = g_sets[g_setIndex];
+				let [c1, c2] = selected;
+				let match = pairs.find(
+					(p) =>
+						p.includes(c1.dataset.word) &&
+						p.includes(c2.dataset.word),
+				);
+
+				if (match) {
+					setTimeout(() => {
+						c1.classList.add("found");
+						c2.classList.add("found");
+						c1.classList.remove("selected");
+						c2.classList.remove("selected");
+						let li = document.createElement("li");
+						let parts = getParts(match);
+						li.textContent = parts[0] + " ↔ " + parts[1];
+						document.getElementById("found").appendChild(li);
+						let table = document.getElementById("grid");
+						if (
+							[...table.querySelectorAll(".card:not(.found)")]
+								.length == 0
+						) {
+							table.style.display = "none";
+							showNextBtn();
+						}
+					}, 300);
+				} else {
+					setTimeout(() => {
+						c1.classList.remove("selected");
+						c2.classList.remove("selected");
+					}, 600);
+				}
+				selected = [];
+			}
+
+			function onClickReveal(div) {
+				const j = div.dataset.j;
+				if (j == 2 - g_mode) {
+					const hidden = div.dataset.hide == "true";
+					div.dataset.hide = hidden ? "false" : true;
+					updateDivContent(div);
+					const divMatch = document.getElementById(
+						"card_" + div.dataset.i + "_" + (1 - j),
+					);
+					if (hidden) {
+						div.classList.add("revealed");
+						divMatch.classList.add("revealed");
+					} else {
+						div.classList.remove("revealed");
+						divMatch.classList.remove("revealed");
+					}
+				}
+				let table = document.getElementById("grid");
+				if (
+					[...table.querySelectorAll(".card:not(.revealed)")]
+						.length == 0
+				) {
+					showNextBtn();
+				}
+			}
+
+			function updateDivContent(div) {
+				if (div.dataset.hide == "true") {
+					div.textContent = "?";
+				} else {
+					div.textContent = div.dataset.word;
+				}
+			}
+
+			function loadSet() {
+				let table = document.getElementById("grid");
+				let foundList = document.getElementById("found");
+
+				table.innerHTML = "";
+				foundList.innerHTML = "";
+				document.getElementById("nextBtn").style.display = "none";
+
+				if (g_setIndex >= g_sets.length) {
+					showNavigation(true);
+
+					document.getElementById("finished").style.display = "block";
+					document.getElementById("navigation").style.display =
+						"block";
+					return;
+				}
+
 				let cards1 = [];
 				let cards2 = [];
+				let pairs = g_sets[g_setIndex];
 				pairs.forEach((pair) => {
 					let parts = getParts(pair);
 					cards1.push(parts[0]);
 					cards2.push(parts[1]);
 				});
-				shuffleArray(cards1);
-				shuffleArray(cards2);
+				if (g_mode == 0) {
+					shuffleArray(cards1);
+					shuffleArray(cards2);
+				}
 				let cards = [];
 				for (let i = 0; i < pairs.length; i += 1) {
 					cards.push(cards1[i]);
@@ -264,80 +403,58 @@
 
 					for (let j = 0; j < 2; j++) {
 						let td = document.createElement("td");
-						if (i + j < cards.length) {
-							let word = cards[i + j];
-							let div = document.createElement("div");
-							div.className = "card";
-							div.textContent = word;
-							div.dataset.word = word;
+						let word = cards[i + j];
+						let div = document.createElement("div");
+						div.id = "card_" + i + "_" + j;
+						div.className = "card";
+						div.dataset.word = word;
+						div.dataset.i = i;
+						div.dataset.j = j;
+						div.dataset.hide = g_mode > 0 && j == 2 - g_mode;
+						updateDivContent(div);
 
-							div.addEventListener("click", () => {
-								if (
-									div.classList.contains("found") ||
-									div.classList.contains("selected")
-								)
-									return;
+						div.addEventListener("click", () => {
+							if (g_mode == 0) {
+								onClickMatch(div);
+								return;
+							} else {
+								onClickReveal(div);
+							}
+						});
 
-								div.classList.add("selected");
-								selected.push(div);
+						td.appendChild(div);
 
-								if (selected.length === 2) {
-									let [c1, c2] = selected;
-									let match = pairs.find(
-										(p) =>
-											p.includes(c1.dataset.word) &&
-											p.includes(c2.dataset.word),
-									);
-
-									if (match) {
-										setTimeout(() => {
-											c1.classList.add("found");
-											c2.classList.add("found");
-											let li =
-												document.createElement("li");
-											let parts = getParts(match);
-											li.textContent =
-												parts[0] + " ↔ " + parts[1];
-											foundList.appendChild(li);
-
-											if (
-												[
-													...table.querySelectorAll(
-														".card:not(.found)",
-													),
-												].length === 0
-											) {
-												table.style.display = "none";
-												let nextBtn =
-													document.createElement(
-														"button",
-													);
-												nextBtn.textContent = "Next";
-												nextBtn.onclick = () => {
-													table.style.display =
-														"table";
-													loadSet(index + 1);
-												};
-												controls.appendChild(nextBtn);
-											}
-										}, 300);
-									} else {
-										setTimeout(() => {
-											c1.classList.remove("selected");
-											c2.classList.remove("selected");
-										}, 600);
-									}
-									selected = [];
-								}
-							});
-
-							td.appendChild(div);
-						}
 						tr.appendChild(td);
 					}
 					table.appendChild(tr);
 				}
 			}
+
+			function showNextBtn() {
+				document.getElementById("nextBtn").style.display =
+					"inline-block";
+			}
+
+			function nextSet() {
+				document.getElementById("grid").style.display = "table";
+				g_setIndex = g_setIndex + 1;
+				loadSet();
+			}
+
+			window.addEventListener("DOMContentLoaded", () => {
+				const params = new URLSearchParams(window.location.search);
+				g_delimiter = params.get("delimiter") || ",";
+				let pairsParam = params.get("pairs") || "";
+				if (pairsParam) {
+					pairsParam
+						.split("|")
+						.forEach((pair) => g_allPairs.push(pair));
+				}
+				document.addEventListener("keydown", handleKeydownSetup);
+				if (g_allPairs.length > 0) {
+					showNavigation();
+				}
+			});
 		</script>
 	</body>
 </html>
